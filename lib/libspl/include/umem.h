@@ -166,6 +166,12 @@ umem_cache_destroy(umem_cache_t *cp)
 	umem_free(cp, sizeof (umem_cache_t));
 }
 
+static inline size_t
+umem_cache_bufsize(umem_cache_t *cp)
+{
+	return cp->cache_bufsize;
+}
+
 static inline void *
 umem_cache_alloc(umem_cache_t *cp, int flags)
 {

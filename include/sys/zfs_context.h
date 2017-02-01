@@ -425,6 +425,7 @@ extern void kstat_set_raw_ops(kstat_t *ksp,
 #define	kmem_cache_destroy(_c)	umem_cache_destroy(_c)
 #define	kmem_cache_alloc(_c, _f) umem_cache_alloc(_c, _f)
 #define	kmem_cache_free(_c, _b)	umem_cache_free(_c, _b)
+#define	kmem_cache_bufsize(_c)	umem_cache_bufsize(_c)
 #define	kmem_debugging()	0
 #define	kmem_cache_reap_now(_c)	umem_cache_reap_now(_c);
 #define	kmem_cache_set_move(_c, _cb)	/* nothing */
@@ -648,6 +649,7 @@ extern void delay(clock_t ticks);
 #define	MSEC_TO_TICK(msec)	((msec) / (MILLISEC / hz))
 #define	USEC_TO_TICK(usec)	((usec) / (MICROSEC / hz))
 #define	NSEC_TO_TICK(usec)	((usec) / (NANOSEC / hz))
+#define	TICK_TO_MSEC(tick)	((tick) * (1000 / hz))
 
 #define	gethrestime_sec() time(NULL)
 #define	gethrestime(t) \

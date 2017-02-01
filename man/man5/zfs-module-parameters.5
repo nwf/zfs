@@ -1561,19 +1561,6 @@ Use \fB1\fR for yes and \fB0\fR for no (default).
 .sp
 .ne 2
 .na
-\fBzfs_resilver_delay\fR (int)
-.ad
-.RS 12n
-Number of ticks to delay prior to issuing a resilver I/O operation when
-a non-resilver or non-scrub I/O operation has occurred within the past
-\fBzfs_scan_idle\fR ticks.
-.sp
-Default value: \fB2\fR.
-.RE
-
-.sp
-.ne 2
-.na
 \fBzfs_resilver_min_time_ms\fR (int)
 .ad
 .RS 12n
@@ -1586,20 +1573,6 @@ Default value: \fB3,000\fR.
 .sp
 .ne 2
 .na
-\fBzfs_scan_idle\fR (int)
-.ad
-.RS 12n
-Idle window in clock ticks.  During a scrub or a resilver, if
-a non-scrub or non-resilver I/O operation has occurred during this
-window, the next scrub or resilver operation is delayed by, respectively
-\fBzfs_scrub_delay\fR or \fBzfs_resilver_delay\fR ticks.
-.sp
-Default value: \fB50\fR.
-.RE
-
-.sp
-.ne 2
-.na
 \fBzfs_scan_min_time_ms\fR (int)
 .ad
 .RS 12n
@@ -1607,19 +1580,6 @@ Scrubs are processed by the sync thread. While scrubbing it will spend
 at least this much time working on a scrub between txg flushes.
 .sp
 Default value: \fB1,000\fR.
-.RE
-
-.sp
-.ne 2
-.na
-\fBzfs_scrub_delay\fR (int)
-.ad
-.RS 12n
-Number of ticks to delay prior to issuing a scrub I/O operation when
-a non-scrub or non-resilver I/O operation has occurred within the past
-\fBzfs_scan_idle\fR ticks.
-.sp
-Default value: \fB4\fR.
 .RE
 
 .sp
