@@ -9,7 +9,7 @@ DEFAULT_INCLUDES += \
 	-I$(top_srcdir)/include \
 	-I$(top_srcdir)/lib/libspl/include
 
-sbin_PROGRAMS = ztest
+sbin_PROGRAMS = ztest nwftest
 
 ztest_SOURCES = \
 	ztest.c
@@ -21,3 +21,13 @@ ztest_LDADD = \
 
 ztest_LDADD += -lm
 ztest_LDFLAGS = -pthread
+
+nwftest_LDADD = \
+	$(top_builddir)/lib/libnvpair/libnvpair.la \
+	$(top_builddir)/lib/libuutil/libuutil.la \
+	$(top_builddir)/lib/libzpool/libzpool.la \
+	$(top_builddir)/lib/libzfs/libzfs.la \
+	$(top_builddir)/lib/libzfs_core/libzfs_core.la
+
+nwftest_LDADD += -lm
+nwftest_LDFLAGS = -pthread
