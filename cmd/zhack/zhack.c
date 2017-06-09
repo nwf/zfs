@@ -55,6 +55,7 @@ extern int reference_tracking_enable;
 extern int zfs_no_scrub_prefetch;
 extern enum ddt_class zfs_scrub_ddt_class_max;
 extern boolean_t zfeature_checks_disable;
+extern uint64_t zfs_scan_checkpoint_intval;
 
 const char cmdname[] = "zhack";
 libzfs_handle_t *g_zfs;
@@ -583,7 +584,7 @@ zhack_do_scrub(int argc, char **argv)
 	zfs_no_scrub_prefetch = B_TRUE;
 
 
-	while ((c = getopt(argc, argv, "D:PRTnrv")) != -1) {
+	while ((c = getopt(argc, argv, "D:PRTi:nrv")) != -1) {
 		switch (c) {
 		case 'D':
 			// How much of the DDT are we scanning?
@@ -612,6 +613,17 @@ zhack_do_scrub(int argc, char **argv)
 			// Turn reference tracking back on
 			reference_tracking_enable = B_TRUE;
 			break;
+		case 'i':
+		{
+			char *endptr = NULL;
+			uint64_t intval = strtoul(optarg, &endptr, 0);
+			if ((errno == 0) && (*endptr == '\0')) {
+				zfs_scan_checkpoint_intval = intval;
+			} else {
+				fatal(NULL, FTAG, "Bad scan interval (-i)");
+			}
+		}
+
 		case 'n':
 			// Don't launch a scrub, just resume one
 			no_spawn++;
@@ -704,6 +716,7 @@ zhack_do_scrub(int argc, char **argv)
 		fprintf(stderr,
 		    "Scrub: ts=%-12" PRIu64 " state=%" PRIu64 " txg=%-15" PRIu64
 		    " toex=%-15" PRIu64 " exd=%-15" PRIu64 " pr=%-15" PRIu64
+		    " sort=%d pend=%-15" PRIu64 " iss=%-15" PRIu64
 		    " ddtbook=%" PRIu64 "/%" PRIu64 "/%" PRIu64 "/%" PRIx64
 		    " zbook=%" PRIu64 "/%" PRIu64 "/%" PRId64 "/%" PRIu64
 		    "\n",
@@ -713,6 +726,9 @@ zhack_do_scrub(int argc, char **argv)
 		    scnp->scn_to_examine,
 		    scnp->scn_examined,
 		    scnp->scn_processed,
+		    scn->scn_is_sorted,
+		    scn->scn_bytes_pending,
+		    scn->scn_bytes_issued,
 		    scnp->scn_ddt_bookmark.ddb_class,
 		    scnp->scn_ddt_bookmark.ddb_type,
 		    scnp->scn_ddt_bookmark.ddb_checksum,
