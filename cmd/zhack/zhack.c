@@ -81,7 +81,7 @@ usage(void)
 	    "        change the refcount on the given feature\n"
 	    "        -d decrease instead of increase the refcount\n"
 	    "        -m add the feature to the label if increasing refcount\n"
-	    "    scrub [-D <ddt_class>] [-PTrv] <pool>\n"
+	    "    scrub [-D <ddt_class>] [-PRTrv] <pool>\n"
 	    "\n"
 	    "    <feature> : should be a feature guid\n");
 	exit(1);
@@ -565,10 +565,13 @@ static int
 zhack_do_scrub(int argc, char **argv)
 {
 	int verbose = 0;
+	int do_resilver = 0;
 	int do_restart = 0;
+	int no_spawn = 0;
 	spa_t *spa = NULL;
+	dsl_pool_t *dp = NULL;
+	dsl_scan_t *scn = NULL;
 	char c;
-
 
 	// Scan the entire DDT
 	zfs_scrub_ddt_class_max = DDT_CLASS_UNIQUE;
@@ -580,7 +583,7 @@ zhack_do_scrub(int argc, char **argv)
 	zfs_no_scrub_prefetch = B_TRUE;
 
 
-	while ((c = getopt(argc, argv, "D:FPTp:rv")) != -1) {
+	while ((c = getopt(argc, argv, "D:PRTnrv")) != -1) {
 		switch (c) {
 		case 'D':
 			// How much of the DDT are we scanning?
@@ -601,13 +604,21 @@ zhack_do_scrub(int argc, char **argv)
 			// Turn prefetching back on
 			zfs_no_scrub_prefetch = B_FALSE;
 			break;
+		case 'R':
+			// Restart a scrub
+			do_restart++;
+			break;
 		case 'T':
 			// Turn reference tracking back on
 			reference_tracking_enable = B_TRUE;
 			break;
+		case 'n':
+			// Don't launch a scrub, just resume one
+			no_spawn++;
+			break;
 		case 'r':
-			// Restart a scrub
-			do_restart++;
+			// Resilver instead of scrub
+			do_resilver++;
 			break;
 		case 'v':
 			// Be chatty
@@ -625,6 +636,9 @@ zhack_do_scrub(int argc, char **argv)
 		(void) fprintf(stderr,
 		    "WARNING: Discarding excess arguments\n");
 	}
+	if (no_spawn && (do_resilver || do_restart)) {
+		fatal(NULL, FTAG, "-n is incompatible with -[Rr]");
+	}
 
 	if (verbose && (g_importargs.paths != 0)) {
 		int sdix = 0;
@@ -635,6 +649,8 @@ zhack_do_scrub(int argc, char **argv)
 	}
 
 	zhack_spa_open(argv[optind], B_FALSE, B_FALSE, B_TRUE, FTAG, &spa);
+	dp = spa->spa_dsl_pool;
+	scn = dp->dp_scan;
 
 	if (verbose) {
 		nvlist_t *nvroot;
@@ -657,25 +673,34 @@ zhack_do_scrub(int argc, char **argv)
 
 	if (do_restart) {
 		if (verbose) {
-			fprintf(stderr, "Cancelling any existing scrub...\n");
+			fprintf(stderr, "First, cancelling any existing scrub...\n");
 		}
-		dsl_scan_cancel(spa->spa_dsl_pool);
+		dsl_scan_cancel(dp);
 	}
 
-	if (verbose) {
-		fprintf(stderr, "Kicking off scrub...\n");
+	if (no_spawn) {
+		if (scn->scn_phys.scn_state == DSS_FINISHED) {
+			fprintf(stderr, "No scrub to resume.\n");
+			goto out;
+		}
+	} else {
+		if (verbose) {
+			fprintf(stderr, "Kicking off %s...\n",
+			    do_resilver ? "resilver" : "scrub");
+		}
+		spa_scan(spa,
+		    do_resilver ? POOL_SCAN_RESILVER : POOL_SCAN_SCRUB);
+
+		if (do_resilver && scn->scn_phys.scn_state == DSS_FINISHED) {
+			fprintf(stderr, "No need to resilver.\n");
+			goto out;
+		}
 	}
-	spa_scan(spa, POOL_SCAN_SCRUB);
 
 	do {
-		txg_wait_synced(spa->spa_dsl_pool, 0);
-		dsl_scan_t *s = spa->spa_dsl_pool->dp_scan;
-		if (!s) {
-			fprintf(stderr, "No dp_scan?!\n");
-			break;
-		}
+		txg_wait_synced(dp, 0);
+		dsl_scan_phys_t *scnp = &scn->scn_phys;
 
-		dsl_scan_phys_t *sp = &s->scn_phys;
 		fprintf(stderr,
 		    "Scrub: ts=%-12" PRIu64 " state=%" PRIu64 " txg=%-15" PRIu64
 		    " toex=%-15" PRIu64 " exd=%-15" PRIu64 " pr=%-15" PRIu64
@@ -683,23 +708,24 @@ zhack_do_scrub(int argc, char **argv)
 		    " zbook=%" PRIu64 "/%" PRIu64 "/%" PRId64 "/%" PRIu64
 		    "\n",
 		    (uint64_t)(time(NULL)),
-		    sp->scn_state,
-		    spa->spa_dsl_pool->dp_tx.tx_open_txg,
-		    sp->scn_to_examine,
-		    sp->scn_examined,
-		    sp->scn_processed,
-		    s->scn_phys.scn_ddt_bookmark.ddb_class,
-		    s->scn_phys.scn_ddt_bookmark.ddb_type,
-		    s->scn_phys.scn_ddt_bookmark.ddb_checksum,
-		    s->scn_phys.scn_ddt_bookmark.ddb_cursor,
-		    s->scn_phys.scn_bookmark.zb_objset,
-		    s->scn_phys.scn_bookmark.zb_object,
-		    s->scn_phys.scn_bookmark.zb_level,
-		    s->scn_phys.scn_bookmark.zb_blkid);
+		    scnp->scn_state,
+		    dp->dp_tx.tx_open_txg,
+		    scnp->scn_to_examine,
+		    scnp->scn_examined,
+		    scnp->scn_processed,
+		    scnp->scn_ddt_bookmark.ddb_class,
+		    scnp->scn_ddt_bookmark.ddb_type,
+		    scnp->scn_ddt_bookmark.ddb_checksum,
+		    scnp->scn_ddt_bookmark.ddb_cursor,
+		    scnp->scn_bookmark.zb_objset,
+		    scnp->scn_bookmark.zb_object,
+		    scnp->scn_bookmark.zb_level,
+		    scnp->scn_bookmark.zb_blkid);
 
 	} while (spa->spa_dsl_pool->dp_scan->scn_phys.scn_state
 	    != DSS_FINISHED);
 
+out:
 	spa_close(spa, FTAG);
 
 	return (0);
