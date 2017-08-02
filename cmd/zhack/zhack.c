@@ -79,7 +79,7 @@ usage(void)
 	    "        change the refcount on the given feature\n"
 	    "        -d decrease instead of increase the refcount\n"
 	    "        -m add the feature to the label if increasing refcount\n"
-	    "    scrub [-D <ddt_class>] [-i scan_interval] [-PRTnrv] <pool>\n"
+	    "    scrub [-D <ddt_class>] [-i scan_interval] [-G gap] [-EPRTnrv] <pool>\n"
 	    "\n"
 	    "    <feature> : should be a feature guid\n");
 	exit(1);
@@ -530,6 +530,7 @@ static int
 zhack_do_scrub(int argc, char **argv)
 {
 	int verbose = 0;
+	int do_ddt_reset = 0;
 	int do_resilver = 0;
 	int do_restart = 0;
 	int no_spawn = 0;
@@ -549,7 +550,7 @@ zhack_do_scrub(int argc, char **argv)
 
 	zfs_scan_direct = B_FALSE;
 
-	while ((c = getopt(argc, argv, "D:PRTi:nrv")) != -1) {
+	while ((c = getopt(argc, argv, "D:EG:PRTi:nrv")) != -1) {
 		switch (c) {
 		case 'D':
 			// How much of the DDT are we scanning?
@@ -603,7 +604,7 @@ zhack_do_scrub(int argc, char **argv)
 				fatal(NULL, FTAG, "Bad scan interval (-i)");
 			}
 		}
-
+		break;
 		case 'n':
 			// Don't launch a scrub, just resume one
 			no_spawn++;
@@ -663,6 +664,7 @@ zhack_do_scrub(int argc, char **argv)
 		}
 	}
 
+
 	if (do_restart) {
 		if (verbose) {
 			fprintf(stderr, "First, cancelling any existing scrub...\n");
@@ -688,6 +690,14 @@ zhack_do_scrub(int argc, char **argv)
 			goto out;
 		}
 	}
+
+	if (do_ddt_reset) {
+		if (verbose) {
+			fprintf(stderr,"Forcibly resetting DDT scan class\n");
+		}
+		scn->scn_phys.scn_ddt_class_max = zfs_scrub_ddt_class_max;
+	}
+
 
 	do {
 		txg_wait_synced(dp, 0);
