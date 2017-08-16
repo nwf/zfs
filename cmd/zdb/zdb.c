@@ -2186,8 +2186,6 @@ dump_dir(objset_t *os)
 		max_slot_used = object + dnode_slots - 1;
 	}
 
-	ASSERT3U(object_count, ==, usedobjs);
-
 	(void) printf("\n");
 
 	(void) printf("    Dnode slots:\n");
@@ -2205,6 +2203,8 @@ dump_dir(objset_t *os)
 		(void) fprintf(stderr, "dmu_object_next() = %d\n", error);
 		abort();
 	}
+
+	ASSERT3U(object_count, ==, usedobjs);
 }
 
 static void

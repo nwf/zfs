@@ -107,13 +107,15 @@ run_and_verify -p "$MPOOL" \
     -e "sysevent.fs.zfs.resilver_start" \
     -e "sysevent.fs.zfs.resilver_finish" \
     -e "sysevent.fs.zfs.config_sync" \
-    "zpool replace -f $MPOOL $VDEV1 $VDEV4"
+    "zpool replace -f $MPOOL $VDEV1 $VDEV4 && \
+    while ! is_pool_resilvered $MPOOL; do sleep 1; done"
 
 # Scrub a pool.
 run_and_verify -p "$MPOOL" \
     -e "sysevent.fs.zfs.scrub_start" \
     -e "sysevent.fs.zfs.scrub_finish" \
-    "zpool scrub $MPOOL"
+    "zpool scrub $MPOOL && \
+    while ! is_pool_scrubbed $MPOOL; do sleep 1; done"
 
 # Export then import a pool (may change to a pool_export event)
 run_and_verify -p "$MPOOL" \

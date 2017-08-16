@@ -1,5 +1,6 @@
 '\" te
 .\" Copyright (c) 2013 by Turbo Fredriksson <turbo@bayour.com>. All rights reserved.
+.\" Copyright (c) 2017 Datto Inc.
 .\" The contents of this file are subject to the terms of the Common Development
 .\" and Distribution License (the "License").  You may not use this file except
 .\" in compliance with the License. You can obtain a copy of the license at
@@ -1640,19 +1641,6 @@ Use \fB1\fR for yes and \fB0\fR for no (default).
 .sp
 .ne 2
 .na
-\fBzfs_resilver_delay\fR (int)
-.ad
-.RS 12n
-Number of ticks to delay prior to issuing a resilver I/O operation when
-a non-resilver or non-scrub I/O operation has occurred within the past
-\fBzfs_scan_idle\fR ticks.
-.sp
-Default value: \fB2\fR.
-.RE
-
-.sp
-.ne 2
-.na
 \fBzfs_resilver_min_time_ms\fR (int)
 .ad
 .RS 12n
@@ -1660,20 +1648,6 @@ Resilvers are processed by the sync thread. While resilvering it will spend
 at least this much time working on a resilver between txg flushes.
 .sp
 Default value: \fB3,000\fR.
-.RE
-
-.sp
-.ne 2
-.na
-\fBzfs_scan_idle\fR (int)
-.ad
-.RS 12n
-Idle window in clock ticks.  During a scrub or a resilver, if
-a non-scrub or non-resilver I/O operation has occurred during this
-window, the next scrub or resilver operation is delayed by, respectively
-\fBzfs_scrub_delay\fR or \fBzfs_resilver_delay\fR ticks.
-.sp
-Default value: \fB50\fR.
 .RE
 
 .sp
@@ -1691,14 +1665,45 @@ Default value: \fB1,000\fR.
 .sp
 .ne 2
 .na
-\fBzfs_scrub_delay\fR (int)
+\fBzfs_scan_mem_lim_fact\fR (int)
 .ad
 .RS 12n
-Number of ticks to delay prior to issuing a scrub I/O operation when
-a non-scrub or non-resilver I/O operation has occurred within the past
-\fBzfs_scan_idle\fR ticks.
+Maximum fraction of RAM used for I/O sorting by sequential scan algorithm.
+This tunable determines the hard limit for I/O sorting memory usage.
+When the hard limit is reached we stop scanning metadata and start issuing
+data verification I/O. This is done until we get below the soft limit.
 .sp
-Default value: \fB4\fR.
+Default value: \fB20\fR which is 5% of RAM (1/20).
+.RE
+
+.sp
+.ne 2
+.na
+\fBzfs_scan_mem_lim_soft_fact\fR (int)
+.ad
+.RS 12n
+The fraction of the hard limit used to determined the soft limit for I/O sorting
+by the sequential scan algorithm. When we cross this limit from bellow no action
+is taken. When we cross this limit from above it is because we are issuing
+verification I/O. In this case (unless the metadata scan is done) we stop
+issuing verification I/O and start scanning metadata again until we get to the
+hard limit.
+.sp
+Default value: \fB20\fR which is 5% of the hard limit (1/20).
+.RE
+
+.sp
+.ne 2
+.na
+\fBzfs_scan_checkpoint_intval\fR (int)
+.ad
+.RS 12n
+To preserve progress across reboots the sequential scan algorithm periodically
+needs to stop metadata scanning and issue all the verifications I/Os to disk.
+The frequency of this flushing is determined by the
+\fBfBzfs_scan_checkpoint_intval\fR tunable.
+.sp
+Default value: \fB7200\fR seconds (every 2 hours).
 .RE
 
 .sp
@@ -1752,9 +1757,92 @@ Default value: \fB2\fR.
 .ad
 .RS 12n
 Max concurrent I/Os per top-level vdev (mirrors or raidz arrays) allowed during
-scrub or resilver operations.
+legacy scrub or resilver operations.
 .sp
 Default value: \fB32\fR.
+.RE
+
+.sp
+.ne 2
+.na
+\fBzfs_scan_md_maxinflight\fR (int)
+.ad
+.RS 12n
+Max concurrent I/Os allowed during scrub or resilver metadata scanning phase.
+.sp
+Default value: \fB1024\fR.
+.RE
+
+.sp
+.ne 2
+.na
+\fBzfs_scan_leaf_maxinflight\fR (int)
+.ad
+.RS 12n
+Max concurrent I/Os per leaf vdev allowed during scrub or resilver data
+verification phase.
+.sp
+Default value: \fB50\fR.
+.RE
+
+.sp
+.ne 2
+.na
+\fBzfs_scan_issue_strategy\fR (int)
+.ad
+.RS 12n
+Strategy used to determine how data verification should be done during scrubs.
+If set to 1, I/Os will always be issued sequentially. This may help performance
+if the pool's data is very disperate. If set to 2, I/Os will be always be issued
+in size order. This may allow time for gaps between smaller IOs to be filled in
+with other I/Os later. If set to 0, I/Os will be issued in size order, except
+during checkpointing when they will be issued sequentially.
+.sp
+Default value: \fB0\fR.
+.RE
+
+.sp
+.ne 2
+.na
+\fBzfs_scan_max_ext_gap\fR (int)
+.ad
+.RS 12n
+Indicates the largest gap in bytes between scrub / resilver I/Os that will still
+be considered sequential for sorting purposes. Changing this value will not
+affect scrubs or resilvers that are already in progress.
+.sp
+Default value: \fB1048576 (1 MB)\fR.
+.RE
+
+.sp
+.ne 2
+.na
+\fBzfs_scan_fill_weight\fR (int)
+.ad
+.RS 12n
+This tunable affects how scrub and resilver I/O segments are ordered. A higher
+number indicates that we care more about how filled in a segment is, while a
+lower number indicates we care more about the size of the extent without
+considering the gaps within a segment. This value is only tunable upon module
+insertion. Changing the value afterwards will have no affect on scrub
+performance.
+.sp
+Default value: \fB3\fR.
+.RE
+
+.sp
+.ne 2
+.na
+\fBzfs_scan_direct\fR (int)
+.ad
+.RS 12n
+A value of 1 indicates that scrubs and resilvers will be gathered metadata in
+memory before issuing sequential I/O. A value of 0 indicates that the legacy
+algorithm will be used where I/O will be initiated as soon as it is discovered.
+Changing this value to 0 will not affect scrubs or resilvers that are already
+in progress.
+.sp
+Default value: \fB0\fR.
 .RE
 
 .sp

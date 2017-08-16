@@ -51,7 +51,6 @@ function run_and_verify
 	zedlog=${zedlog:-$ZEDLET_DIR/zed.debug.log}
 	fullcmd="$1"
 	cmd=$(echo $fullcmd | awk '{print $1}')
-	subcmd=$(echo $fullcmd | awk '{print $2}')
 
 	# If we aren't running zpool or zfs, something is wrong
 	[[ $cmd == "zpool" || $cmd == "zfs" ]] || \
