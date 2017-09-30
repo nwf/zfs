@@ -165,7 +165,7 @@ void
 __set_error(const char *file, const char *func, int line, int err)
 {
 	if (zfs_flags & ZFS_DEBUG_SET_ERROR)
-		__dprintf(file, func, line, "error %lu", err);
+		__dprintf(file, func, line, "error %lu\n", err);
 }
 
 #ifdef _KERNEL
