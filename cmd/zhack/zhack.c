@@ -120,7 +120,7 @@ space_delta_cb(dmu_object_type_t bonustype, void *data,
  * Target is the dataset whose pool we want to open.
  */
 static void
-zhack_import(char *target, boolean_t readonly)
+zhack_import(char *target, boolean_t readonly, boolean_t feat_ign)
 {
 	nvlist_t *config;
 	nvlist_t *props;
@@ -146,10 +146,12 @@ zhack_import(char *target, boolean_t readonly)
 		    zpool_prop_to_name(ZPOOL_PROP_READONLY), 1) == 0);
 	}
 
-	zfeature_checks_disable = B_TRUE;
+	if (feat_ign)
+		zfeature_checks_disable = B_TRUE;
 	error = spa_import(target, config, props,
 	    (readonly ?  ZFS_IMPORT_SKIP_MMP : ZFS_IMPORT_NORMAL));
-	zfeature_checks_disable = B_FALSE;
+	if (feat_ign)
+		zfeature_checks_disable = B_FALSE;
 	if (error == EEXIST)
 		error = 0;
 
@@ -159,15 +161,18 @@ zhack_import(char *target, boolean_t readonly)
 }
 
 static void
-zhack_spa_open(char *target, boolean_t readonly, void *tag, spa_t **spa)
+zhack_spa_open(char *target, boolean_t readonly, boolean_t feat_ign,
+    void *tag, spa_t **spa)
 {
 	int err;
 
-	zhack_import(target, readonly);
+	zhack_import(target, readonly, feat_ign);
 
-	zfeature_checks_disable = B_TRUE;
+	if (feat_ign)
+		zfeature_checks_disable = B_TRUE;
 	err = spa_open(target, spa, tag);
-	zfeature_checks_disable = B_FALSE;
+	if (feat_ign)
+		zfeature_checks_disable = B_FALSE;
 
 	if (err != 0)
 		fatal(*spa, FTAG, "cannot open '%s': %s", target,
@@ -234,7 +239,7 @@ zhack_do_feature_stat(int argc, char **argv)
 	}
 	target = argv[0];
 
-	zhack_spa_open(target, B_TRUE, FTAG, &spa);
+	zhack_spa_open(target, B_TRUE, B_TRUE, FTAG, &spa);
 	os = spa->spa_meta_objset;
 
 	dump_obj(os, spa->spa_feat_for_read_obj, "for_read");
@@ -313,7 +318,7 @@ zhack_do_feature_enable(int argc, char **argv)
 	if (!zfeature_is_valid_guid(feature.fi_guid))
 		fatal(NULL, FTAG, "invalid feature guid: %s", feature.fi_guid);
 
-	zhack_spa_open(target, B_FALSE, FTAG, &spa);
+	zhack_spa_open(target, B_FALSE, B_TRUE, FTAG, &spa);
 	mos = spa->spa_meta_objset;
 
 	if (zfeature_is_supported(feature.fi_guid))
@@ -406,7 +411,7 @@ zhack_do_feature_ref(int argc, char **argv)
 	if (!zfeature_is_valid_guid(feature.fi_guid))
 		fatal(NULL, FTAG, "invalid feature guid: %s", feature.fi_guid);
 
-	zhack_spa_open(target, B_FALSE, FTAG, &spa);
+	zhack_spa_open(target, B_FALSE, B_TRUE, FTAG, &spa);
 	mos = spa->spa_meta_objset;
 
 	if (zfeature_is_supported(feature.fi_guid)) {
