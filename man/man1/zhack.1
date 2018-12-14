@@ -71,6 +71,44 @@ feature in \fIpool\fR.
 .IP
 The \fB\-m\fR switch indicates that the \fIguid\fR feature is now
 required to read the pool MOS.
+.LP
+.BI "scrub " "pool"
+.IP
+Import and scrub a pool, entirely from userland.  This is mostly useful for
+developers and is substantially less friendly than scrubbing an imported
+pool.  In particular, there is no status reporting mechanism, and so
+any discovered errors are not easily identified.
+.IP
+The \fB\-D class\fR option specifies the DDT class(es) to scan specially.
+Setting \fBclass\fR to 0 will limit special handling to dedup-ditto blocks.
+The value 1 will ensure that the scan will visit all deduplicated blocks with
+refcounts greater than one a single time, but will require that the DDT be
+frequently accessed during scan.  The value 2 will cause the scan to walk all
+DDT entries, including those with refcount one, and will then not need to probe
+the DDT during the residual scan of non-deduplicated blocks.  The default
+behavior is as if the value 1 had been specified.  Pass \fB\-E\fR to attempt to
+change the DDT class on an existing scrub; the tool will refuse to execute any
+unsafe change (i.e., downwards).
+.IP
+The \fB\-n\fR option causes the program to only resume a scrub (or resilver) if
+one was in progress at time of export; that is, it will not begin a new scrub.
+Contrawise, \fB\-R\fR will forcibly restart any existing scrub or resilver, and
+has no effect if one was not in progress at time of export.
+.IP
+The \fB\-r\fR option requests the tool to (re)start a resilver rather than a
+scrub (the default).
+.IP
+The \fB\-i seconds\fR option controls the inter-checkpoint time of the scan.
+That is, every \fBseconds\fR seconds, the scan will drain its queue of blocks
+to scan in media order.  The \fB\-M\fR option overrides ZFS's detection of the
+amount of physical memory to use, limiting the ARC and the scan queue.
+.IP
+The \fB\-G\fR, \fB\-H\fR, \fB\-P\fR, \fB\-S\fR, and \fB\-T\fR options affect
+internal parameters of ZFS and are almost surely of interest only to developers
+seeking to characterize the scrub algorithm; for details, please see the source.
+.IP
+Give \fB\-v\fR to cause the command to be verbose during operation, regularly
+writing terse status information to stderr.
 .SH EXAMPLES
 .LP
 .nf
